@@ -30,6 +30,9 @@ class DeviceManager: ObservableObject {
     // UDID → hardware UDID
     private var hardwareUDIDs: [String: String] = [:]
 
+    /// PyInstaller 持久化解壓目錄（避免每次重開機都重新解壓 Python，加速啟動）
+    private var toolTmpDir: String { "\(NSHomeDirectory())/.pogogo/tmp" }
+
     /// 內建工具（pogogo 二進位）是否已部署就緒
     @Published var isBundledToolAvailable: Bool = false
     @Published var tunneldStatus: TunneldStatus = .unknown
@@ -122,6 +125,9 @@ class DeviceManager: ObservableObject {
     private func deployBundledBinaryIfNeeded() -> (available: Bool, updated: Bool) {
         let fm = FileManager.default
 
+        // Ensure persistent PyInstaller tmp dir exists
+        try? fm.createDirectory(atPath: toolTmpDir, withIntermediateDirectories: true)
+
         guard let bundled = bundledToolPath else {
             // 開發環境：Bundle 中無 binary，檢查已部署的版本
             let exists = fm.fileExists(atPath: deployedToolPath)
@@ -147,6 +153,9 @@ class DeviceManager: ObservableObject {
         }
 
         if needsCopy {
+            // Binary changed — invalidate cached PyInstaller extraction
+            try? fm.removeItem(atPath: toolTmpDir)
+            try? fm.createDirectory(atPath: toolTmpDir, withIntermediateDirectories: true)
             try? fm.removeItem(atPath: deployedToolPath)
             do {
                 try fm.copyItem(atPath: bundled, toPath: deployedToolPath)
@@ -534,7 +543,8 @@ class DeviceManager: ObservableObject {
         task.environment = [
             "HOME": NSHomeDirectory(),
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin",
-            "PYTHONUNBUFFERED": "1"
+            "PYTHONUNBUFFERED": "1",
+            "TMPDIR": toolTmpDir
         ]
 
         FileManager.default.createFile(atPath: "/tmp/pogogo-worker.log", contents: nil)
@@ -598,7 +608,8 @@ class DeviceManager: ObservableObject {
         task.environment = [
             "HOME": NSHomeDirectory(),
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin",
-            "PYTHONUNBUFFERED": "1"
+            "PYTHONUNBUFFERED": "1",
+            "TMPDIR": toolTmpDir
         ]
         task.standardOutput = Pipe()
         task.standardError = Pipe()
@@ -613,7 +624,8 @@ class DeviceManager: ObservableObject {
         task.environment = [
             "HOME": NSHomeDirectory(),
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin",
-            "PYTHONUNBUFFERED": "1"
+            "PYTHONUNBUFFERED": "1",
+            "TMPDIR": toolTmpDir
         ]
         let outPipe = Pipe()
         let errPipe = Pipe()
