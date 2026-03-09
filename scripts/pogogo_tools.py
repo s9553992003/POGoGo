@@ -19,26 +19,63 @@ def cmd_detect():
     import asyncio
     import inspect
 
+    # 裝置名稱快取（跨呼叫持久化，避免每次都重建 lockdown 連線）
+    name_cache_path = os.path.expanduser('~/.pogogo/device_names.json')
+
+    def load_name_cache():
+        try:
+            with open(name_cache_path) as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def save_name_cache(cache):
+        try:
+            os.makedirs(os.path.dirname(name_cache_path), exist_ok=True)
+            with open(name_cache_path, 'w') as f:
+                json.dump(cache, f)
+        except Exception:
+            pass
+
+    async def _fetch_name(serial):
+        """透過 lockdown 取得裝置名稱，最多等待 2 秒，逾時返回 serial。"""
+        from pymobiledevice3.lockdown import create_using_usbmux
+
+        async def _inner():
+            lc_raw = create_using_usbmux(serial=serial)
+            lc = (await lc_raw) if inspect.iscoroutine(lc_raw) else lc_raw
+            name = (lc.all_values or {}).get('DeviceName', serial)
+            close_raw = lc.close()
+            if inspect.iscoroutine(close_raw):
+                await close_raw
+            return name
+
+        try:
+            return await asyncio.wait_for(_inner(), timeout=2.0)
+        except Exception:
+            return serial
+
     async def _detect():
         from pymobiledevice3.usbmux import list_devices
-        from pymobiledevice3.lockdown import create_using_usbmux
-        # 相容 sync（舊版）和 async（新版）list_devices
         raw = list_devices()
         devices = (await raw) if inspect.iscoroutine(raw) else raw
         usb = [d for d in devices if d.connection_type == 'USB']
+
+        name_cache = load_name_cache()
+        cache_updated = False
         result = []
         for dev in usb:
-            name = dev.serial
-            try:
-                lc_raw = create_using_usbmux(serial=dev.serial)
-                lc = (await lc_raw) if inspect.iscoroutine(lc_raw) else lc_raw
-                name = (lc.all_values or {}).get('DeviceName', dev.serial)
-                close_raw = lc.close()
-                if inspect.iscoroutine(close_raw):
-                    await close_raw
-            except Exception:
-                pass
+            if dev.serial in name_cache:
+                name = name_cache[dev.serial]
+            else:
+                name = await _fetch_name(dev.serial)
+                if name != dev.serial:  # 成功取得真實名稱，存入快取
+                    name_cache[dev.serial] = name
+                    cache_updated = True
             result.append({"hwUDID": dev.serial, "name": name})
+
+        if cache_updated:
+            save_name_cache(name_cache)
         return result
 
     try:
