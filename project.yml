@@ -1,0 +1,46 @@
+name: POGoGo
+options:
+  bundleIdPrefix: com.pogogo
+  deploymentTarget:
+    macOS: "12.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  POGoGo:
+    type: application
+    platform: macOS
+    deploymentTarget: "12.0"
+    sources:
+      - path: Sources/POGoGo
+        type: group
+      - path: Resources
+        excludes:
+          - "pogogo"
+          - "pogogo_arm64"
+          - "pogogo_x86_64"
+      # pogogo arch-specific binaries
+      - path: Resources/pogogo_arm64
+        buildPhase: resources
+        type: file
+      - path: Resources/pogogo_x86_64
+        buildPhase: resources
+        type: file
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pogogo.app
+        INFOPLIST_FILE: Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Sources/POGoGo/POGoGo.entitlements
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "12.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        # 不使用沙盒，以便執行 idevicesetlocation
+        CODE_SIGN_STYLE: Automatic

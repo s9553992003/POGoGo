@@ -1,0 +1,28 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+build/
+dist/
+
+# PyInstaller build artifacts
+scripts/dist/
+scripts/build_pyinstaller*/
+scripts/*.spec
+/tmp/pogogo_build_*_venv/
+
+# DMG
+*.dmg
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+.ruby-lsp/
+
+# Universal binary (built by lipo from arm64+x86_64, not needed in repo)
+Resources/pogogo
+
+# Secrets (notarize.sh contains credentials - keep local only)
+scripts/notarize.sh
