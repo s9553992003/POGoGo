@@ -70,51 +70,70 @@ def cmd_tunneld():
     # 在此 patch 加入啟動時的初始掃描
     original_monitor_usbmux = TunneldCore.monitor_usbmux_task
 
-    async def patched_monitor_usbmux(self):
-        # 啟動時掃描已連接的 USB 裝置
-        print('[pogogo] patched_monitor_usbmux: starting initial USB scan', flush=True)
+    async def _try_connect_device(self, mux_device):
+        """嘗試為單一裝置建立 tunnel，回傳是否成功。"""
+        tid = f"usbmux-{mux_device.serial}-{mux_device.connection_type}"
+        if self.tunnel_exists_for_udid(mux_device.serial) or tid in self.tunnel_tasks:
+            return True
+        service = None
         try:
-            mux = await usbmux.create_mux()
-            await mux.get_device_list(timeout=2.0)
-            devs = list(mux.devices)
-            print(f'[pogogo] found {len(devs)} mux devices: {[d.serial for d in devs]}', flush=True)
-            for mux_device in devs:
-                tid = f"usbmux-{mux_device.serial}-{mux_device.connection_type}"
-                if self.tunnel_exists_for_udid(mux_device.serial):
-                    print(f'[pogogo] {mux_device.serial}: tunnel already exists, skip', flush=True)
-                    continue
-                if tid in self.tunnel_tasks:
-                    print(f'[pogogo] {mux_device.serial}: task already exists, skip', flush=True)
-                    continue
-                print(f'[pogogo] {mux_device.serial}: creating CoreDeviceTunnelProxy...', flush=True)
-                service = None
-                try:
-                    async with await create_using_usbmux(mux_device.serial) as lockdown:
-                        service = await CoreDeviceTunnelProxy.create(lockdown)
-                    print(f'[pogogo] {mux_device.serial}: CoreDeviceTunnelProxy created, starting tunnel task', flush=True)
-                    self.tunnel_tasks[tid] = TunnelTask(
-                        udid=mux_device.serial,
-                        task=asyncio.create_task(
-                            self.start_tunnel_task(tid, service, protocol=TunnelProtocol.TCP),
-                            name=f"start-tunnel-task-{tid}",
-                        ),
-                    )
-                except Exception as e:
-                    print(f'[pogogo] {mux_device.serial}: FAILED to create tunnel proxy: {type(e).__name__}: {e}', flush=True)
-                    traceback.print_exc()
-                    if service is not None:
-                        try:
-                            await service.close()
-                        except Exception:
-                            pass
-            await mux.close()
+            async with await create_using_usbmux(mux_device.serial) as lockdown:
+                service = await CoreDeviceTunnelProxy.create(lockdown)
+            print(f'[pogogo] {mux_device.serial}: tunnel proxy created', flush=True)
+            self.tunnel_tasks[tid] = TunnelTask(
+                udid=mux_device.serial,
+                task=asyncio.create_task(
+                    self.start_tunnel_task(tid, service, protocol=TunnelProtocol.TCP),
+                    name=f"start-tunnel-task-{tid}",
+                ),
+            )
+            return True
         except Exception as e:
-            print(f'[pogogo] patched_monitor_usbmux outer error: {type(e).__name__}: {e}', flush=True)
-            traceback.print_exc()
-        print('[pogogo] initial scan done, continuing to original monitor_usbmux_task', flush=True)
+            print(f'[pogogo] {mux_device.serial}: FAILED: {type(e).__name__}: {e}', flush=True)
+            if service is not None:
+                try:
+                    await service.close()
+                except Exception:
+                    pass
+            return False
+
+    async def patched_monitor_usbmux(self):
+        # 啟動時以 retry 掃描已連接的 USB 裝置（最多嘗試 6 次，間隔遞增）
+        async def initial_scan_with_retry():
+            delays = [0, 3, 5, 10, 15, 20]
+            for attempt, delay in enumerate(delays):
+                if delay:
+                    await asyncio.sleep(delay)
+                try:
+                    mux = await usbmux.create_mux()
+                    await mux.get_device_list(timeout=2.0)
+                    devs = list(mux.devices)
+                    await mux.close()
+                except Exception as e:
+                    print(f'[pogogo] scan attempt {attempt+1} mux error: {e}', flush=True)
+                    continue
+
+                pending = [
+                    d for d in devs
+                    if not self.tunnel_exists_for_udid(d.serial)
+                    and f"usbmux-{d.serial}-{d.connection_type}" not in self.tunnel_tasks
+                ]
+                if not pending:
+                    print(f'[pogogo] all devices have tunnels after attempt {attempt+1}', flush=True)
+                    return
+
+                print(f'[pogogo] scan attempt {attempt+1}: {len(pending)} device(s) need tunnel', flush=True)
+                for mux_device in pending:
+                    await self._try_connect_device(mux_device)
+
+            print('[pogogo] initial scan exhausted all retries', flush=True)
+
+        asyncio.create_task(initial_scan_with_retry(), name="pogogo-initial-scan")
+        print('[pogogo] initial scan task started, continuing to original monitor_usbmux_task', flush=True)
         # 繼續正常的 listen 監控
         await original_monitor_usbmux(self)
 
+    TunneldCore._try_connect_device = _try_connect_device
     TunneldCore.monitor_usbmux_task = patched_monitor_usbmux
 
     runner = TunneldRunner(host=host, port=port, protocol=TunnelProtocol.TCP)

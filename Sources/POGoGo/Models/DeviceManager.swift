@@ -230,9 +230,20 @@ class DeviceManager: ObservableObject {
                 if self.selectedDeviceUDID == nil || !udids.contains(self.selectedDeviceUDID!) {
                     self.selectedDeviceUDID = first
                 }
+                let wasDisconnected = !self.isConnected
                 self.isConnected = true
                 let udid = self.selectedDeviceUDID ?? first
                 self.deviceName = nameMap[udid] ?? "iPhone"
+                // 裝置重新連接後，若有待注入座標且 worker 未執行，自動重啟
+                if wasDisconnected {
+                    let coordsExist = FileManager.default.fileExists(atPath: self.coordsFile)
+                    let stopExists  = FileManager.default.fileExists(atPath: self.stopFile)
+                    if coordsExist && !stopExists {
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                            self?.ensureWorkerRunning()
+                        }
+                    }
+                }
             } else {
                 self.isConnected = false
                 self.deviceName = "未連接"
@@ -540,6 +551,13 @@ class DeviceManager: ObservableObject {
             self.workerLock.lock()
             self.workerProcess = nil
             self.workerLock.unlock()
+            // 若非用戶主動停止且仍有座標，延遲重啟 worker
+            let stopExists  = FileManager.default.fileExists(atPath: self.stopFile)
+            let coordsExist = FileManager.default.fileExists(atPath: self.coordsFile)
+            guard !stopExists, coordsExist else { return }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.ensureWorkerRunning()
+            }
         }
 
         do {
