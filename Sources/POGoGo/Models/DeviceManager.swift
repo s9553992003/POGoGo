@@ -62,6 +62,7 @@ class DeviceManager: ObservableObject {
     // 持久化 worker 進程（保持單一 DVT 連線）
     private var workerProcess: Process?
     private let workerLock = NSLock()
+    private var workerRestartCount = 0
 
     // worker 相關檔案路徑
     private let coordsFile = "/tmp/pogogo_coords.txt"
@@ -493,6 +494,7 @@ class DeviceManager: ObservableObject {
     /// 不受速率限制，立即設置位置（用於起始點錨定）
     func forceSetLocation(latitude: Double, longitude: Double) {
         lastLocationSet = Date()
+        workerRestartCount = 0
         writeCoords(latitude: latitude, longitude: longitude)
         ensureWorkerRunning()
     }
@@ -514,16 +516,26 @@ class DeviceManager: ObservableObject {
 
         locationQueue.async { [weak self] in
             guard let self = self else { return }
-            // 確認裝置已在 tunneld 中，否則提示用戶
-            let available = self.tunneldDeviceUDIDs()
-            if !available.isEmpty && !available.contains(hwUDID) {
-                let list = available.joined(separator: ", ")
-                DispatchQueue.main.async {
-                    self.installProgress = "裝置未在 tunnel 中（tunneld 有: \(list.prefix(40))）\n請確認 Developer Mode 已開啟"
+            // 確認裝置已在 tunneld 中（最多重試 5 次，每次等 3s）
+            // 裝置剛連接後 tunneld 需要數秒才建立 tunnel，不能只試一次
+            for attempt in 0..<5 {
+                let available = self.tunneldDeviceUDIDs()
+                if available.isEmpty || available.contains(hwUDID) {
+                    // available 為空 = API 呼叫失敗，無從判斷，直接嘗試啟動
+                    // available 包含本裝置 = 就緒
+                    self.startWorker(hwUDID: hwUDID)
+                    return
                 }
-                return
+                if attempt < 4 {
+                    self.dlog("ensureWorker: not in tunneld (attempt \(attempt+1)/5), waiting 3s...")
+                    Thread.sleep(forTimeInterval: 3.0)
+                } else {
+                    let list = available.joined(separator: ", ")
+                    DispatchQueue.main.async {
+                        self.installProgress = "裝置未在 tunnel 中（tunneld: \(list.prefix(40))）\n請確認 Developer Mode 已開啟"
+                    }
+                }
             }
-            self.startWorker(hwUDID: hwUDID)
         }
     }
 
@@ -556,17 +568,41 @@ class DeviceManager: ObservableObject {
             task.standardError = Pipe()
         }
 
-        task.terminationHandler = { [weak self] _ in
+        task.terminationHandler = { [weak self] p in
             guard let self = self else { return }
+            let status = p.terminationStatus
+            self.dlog("worker terminated: status=\(status)")
             self.workerLock.lock()
             self.workerProcess = nil
             self.workerLock.unlock()
-            // 若非用戶主動停止且仍有座標，延遲重啟 worker
+            // 若非用戶主動停止且仍有座標，退避重啟 worker
             let stopExists  = FileManager.default.fileExists(atPath: self.stopFile)
             let coordsExist = FileManager.default.fileExists(atPath: self.coordsFile)
             guard !stopExists, coordsExist else { return }
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                self?.ensureWorkerRunning()
+            self.workerRestartCount += 1
+            let maxRestarts = 5
+            let delay = min(3.0 * Double(self.workerRestartCount), 20.0)
+            // 根據退出碼提示用戶原因
+            DispatchQueue.main.async {
+                switch status {
+                case 2:
+                    self.installProgress = "裝置不在 tunnel 中，嘗試重連..."
+                case 1:
+                    self.installProgress = "GPS 注入發生錯誤，嘗試重啟..."
+                default:
+                    break
+                }
+            }
+            if self.workerRestartCount <= maxRestarts {
+                self.dlog("worker restart \(self.workerRestartCount)/\(maxRestarts) in \(Int(delay))s")
+                DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.ensureWorkerRunning()
+                }
+            } else {
+                self.dlog("worker exceeded max restarts (\(maxRestarts)), giving up")
+                DispatchQueue.main.async {
+                    self.installProgress = "GPS 注入失敗（worker 已重啟 \(maxRestarts) 次）\n請確認裝置連接穩定"
+                }
             }
         }
 
@@ -575,7 +611,12 @@ class DeviceManager: ObservableObject {
             workerLock.lock()
             workerProcess = task
             workerLock.unlock()
-        } catch {}
+        } catch {
+            dlog("startWorker: task.run() failed: \(error)")
+            DispatchQueue.main.async {
+                self.installProgress = "無法啟動 worker: \(error.localizedDescription)"
+            }
+        }
     }
 
     func stopWorker() {
@@ -585,6 +626,7 @@ class DeviceManager: ObservableObject {
         workerProcess = nil
         workerLock.unlock()
         w?.terminate()
+        workerRestartCount = 0
     }
 
     func resetLocation() {

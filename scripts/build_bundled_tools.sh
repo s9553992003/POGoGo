@@ -128,6 +128,9 @@ build_arch() {
             --hidden-import requests \
             --hidden-import click \
             --hidden-import asyncio \
+            --exclude-module PIL \
+            --exclude-module Pillow \
+            --exclude-module numpy \
             --noconfirm \
             --clean \
             --target-arch x86_64 \
@@ -147,6 +150,9 @@ build_arch() {
             --hidden-import requests \
             --hidden-import click \
             --hidden-import asyncio \
+            --exclude-module PIL \
+            --exclude-module Pillow \
+            --exclude-module numpy \
             --noconfirm \
             --clean \
             --target-arch arm64 \

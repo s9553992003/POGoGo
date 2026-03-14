@@ -235,6 +235,8 @@ def cmd_worker(udid):
             log('LocationSimulation ready')
             last = None
             last_set_time = 0.0
+            consecutive_errors = 0
+            MAX_CONSECUTIVE = 3
             while not os.path.exists(STOP):
                 c = read_coords()
                 now = time.time()
@@ -244,10 +246,14 @@ def cmd_worker(udid):
                         changed = c != last
                         last = c
                         last_set_time = now
+                        consecutive_errors = 0
                         log(('set ' if changed else 'refresh ') + str(c))
                     except Exception as e:
-                        log('set error: ' + str(e))
-                        return
+                        consecutive_errors += 1
+                        log(f'set error ({consecutive_errors}/{MAX_CONSECUTIVE}): {e}')
+                        if consecutive_errors >= MAX_CONSECUTIVE:
+                            log('too many consecutive errors, exiting')
+                            return
                 await asyncio.sleep(0.1)
 
     try:
