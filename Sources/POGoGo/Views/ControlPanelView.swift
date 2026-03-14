@@ -38,10 +38,6 @@ struct ControlPanelView: View {
                     coordinateSection
                     Divider()
 
-                    // 速度控制
-                    speedSection
-                    Divider()
-
                     // 冷卻計時器
                     cooldownSection
                     Divider()
@@ -58,9 +54,16 @@ struct ControlPanelView: View {
 
             Divider()
 
-            // 搖桿（ScrollView 外，避免 macOS 拖曳事件被攔截）
-            joystickSection
-                .padding(16)
+            // 速度控制 + 搖桿（ScrollView 外，避免 macOS 拖曳事件被攔截）
+            VStack(spacing: 0) {
+                speedSection
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                Divider()
+                joystickSection
+                    .padding(16)
+            }
         }
         .frame(width: 240)
         .background(Color(NSColor.windowBackgroundColor))
