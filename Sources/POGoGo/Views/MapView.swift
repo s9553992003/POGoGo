@@ -229,58 +229,51 @@ struct MapView: NSViewRepresentable {
     }
 }
 
-// MARK: - macOS 12 相容：NSSlider 子類別
+// MARK: - 純 SwiftUI 滑桿（取代 NSSlider，修正拖曳事件被 AppKit hosting 攔截的問題）
 
-/// NSSlider.intrinsicContentSize.width 回傳 noIntrinsicMetric（-1），
-/// 在 macOS 12 SwiftUI validateDimension 中造成 EXC_BAD_INSTRUCTION。
-/// 覆寫 width 為 0，讓 SwiftUI 以「無最小寬度偏好」展開填滿父容器。
-final class _NSSliderCompat: NSSlider {
-    override var intrinsicContentSize: NSSize {
-        let s = super.intrinsicContentSize
-        return NSSize(width: max(0, s.width), height: max(0, s.height))
-    }
-}
-
-/// 包裝 _NSSliderCompat，取代 SwiftUI Slider，修正 macOS 12 validateDimension crash。
-/// range: 滑桿範圍；step: 步進值（0 = 連續）。
-struct _CompatibleSlider: NSViewRepresentable {
+/// 純 SwiftUI 實作，使用 DragGesture，避免 NSViewRepresentable 在 macOS 13+
+/// 因 AppKit 事件路由問題導致 thumb 無法拖動。同時不依賴 NSSlider，
+/// 不會觸發 macOS 12 validateDimension crash。
+struct _CompatibleSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double>
     var step: Double = 0
 
-    func makeNSView(context: Context) -> _NSSliderCompat {
-        let slider = _NSSliderCompat()
-        slider.minValue = range.lowerBound
-        slider.maxValue = range.upperBound
-        slider.doubleValue = value
-        slider.isContinuous = true
-        slider.target = context.coordinator
-        slider.action = #selector(Coordinator.sliderChanged(_:))
-        return slider
+    private var fraction: Double {
+        guard range.upperBound > range.lowerBound else { return 0 }
+        return (value - range.lowerBound) / (range.upperBound - range.lowerBound)
     }
 
-    func updateNSView(_ nsView: _NSSliderCompat, context: Context) {
-        if abs(nsView.doubleValue - value) > 1e-9 {
-            nsView.doubleValue = value
-        }
+    private func setValue(from x: CGFloat, width: CGFloat) {
+        guard width > 0 else { return }
+        let raw = Double(x / width) * (range.upperBound - range.lowerBound) + range.lowerBound
+        let clamped = min(max(raw, range.lowerBound), range.upperBound)
+        value = step > 0 ? (clamped / step).rounded() * step : clamped
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
-
-    class Coordinator: NSObject {
-        var parent: _CompatibleSlider
-        init(parent: _CompatibleSlider) { self.parent = parent }
-
-        @objc func sliderChanged(_ sender: NSSlider) {
-            let v = sender.doubleValue
-            let step = parent.step
-            if step > 0 {
-                let stepped = (v / step).rounded() * step
-                parent.value = min(max(stepped, parent.range.lowerBound), parent.range.upperBound)
-            } else {
-                parent.value = v
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let thumbX = max(8, min(w - 8, w * fraction))
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.25))
+                    .frame(height: 4)
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(width: max(0, thumbX), height: 4)
+                Circle()
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
+                    .frame(width: 16, height: 16)
+                    .offset(x: thumbX - 8)
             }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in setValue(from: v.location.x, width: w) }
+            )
         }
+        .frame(height: 20)
     }
 }
 
