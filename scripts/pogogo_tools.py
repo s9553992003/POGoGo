@@ -206,55 +206,68 @@ def cmd_worker(udid):
 
     async def _run():
         import requests
-        from pymobiledevice3.tunneld.api import get_tunneld_devices
-        from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
+        from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
 
+        # 從 tunneld HTTP API 取得 tunnel 資訊（含 UDID mapping）
         try:
-            tunneld_udids = list(requests.get('http://127.0.0.1:49151', timeout=2).json().keys())
-        except Exception:
-            tunneld_udids = []
+            tunnels = requests.get('http://127.0.0.1:49151', timeout=2).json()
+        except Exception as e:
+            log('tunneld API failed: ' + str(e))
+            sys.exit(2)
 
-        if tunneld_udids and udid not in tunneld_udids:
+        if udid not in tunnels:
             log('device not in tunneld: ' + udid)
-            log('tunneld has: ' + ', '.join(tunneld_udids))
+            log('tunneld has: ' + ', '.join(tunnels.keys()))
             sys.exit(2)
 
-        rsds = await get_tunneld_devices()
-        target = next((r for r in rsds if r.udid == udid), None)
-        if not target:
-            log('device not in tunneld (rsd): ' + udid)
-            if rsds:
-                log('available rsds: ' + ', '.join(r.udid for r in rsds))
+        # 為此裝置建立 RSD 連線
+        rsd = None
+        for tunnel_details in tunnels[udid]:
+            r = RemoteServiceDiscoveryService(
+                (tunnel_details['tunnel-address'], tunnel_details['tunnel-port']),
+                name=tunnel_details['interface']
+            )
+            try:
+                await r.connect()
+                rsd = r
+                break
+            except Exception as e:
+                log(f'rsd connect error: {e}')
+        if not rsd:
+            log('failed to connect RSD for ' + udid)
             sys.exit(2)
 
-        log('connecting to ' + udid)
-        async with DvtSecureSocketProxyService(target) as dvt:
-            log('DVT connected')
-            ls = LocationSimulation(dvt)
-            log('LocationSimulation ready')
-            last = None
-            last_set_time = 0.0
-            consecutive_errors = 0
-            MAX_CONSECUTIVE = 3
-            while not os.path.exists(STOP):
-                c = read_coords()
-                now = time.time()
-                if c and (c != last or now - last_set_time >= REFRESH_INTERVAL):
-                    try:
-                        await ls.set(c[0], c[1])
-                        changed = c != last
-                        last = c
-                        last_set_time = now
-                        consecutive_errors = 0
-                        log(('set ' if changed else 'refresh ') + str(c))
-                    except Exception as e:
-                        consecutive_errors += 1
-                        log(f'set error ({consecutive_errors}/{MAX_CONSECUTIVE}): {e}')
-                        if consecutive_errors >= MAX_CONSECUTIVE:
-                            log('too many consecutive errors, exiting')
-                            return
-                await asyncio.sleep(0.1)
+        log('connecting DVT to ' + udid)
+        try:
+            async with DvtProvider(rsd) as dvt, LocationSimulation(dvt) as ls:
+                log('DVT connected')
+                log('LocationSimulation ready')
+                last = None
+                last_set_time = 0.0
+                consecutive_errors = 0
+                MAX_CONSECUTIVE = 3
+                while not os.path.exists(STOP):
+                    c = read_coords()
+                    now = time.time()
+                    if c and (c != last or now - last_set_time >= REFRESH_INTERVAL):
+                        try:
+                            await ls.set(c[0], c[1])
+                            changed = c != last
+                            last = c
+                            last_set_time = now
+                            consecutive_errors = 0
+                            log(('set ' if changed else 'refresh ') + str(c))
+                        except Exception as e:
+                            consecutive_errors += 1
+                            log(f'set error ({consecutive_errors}/{MAX_CONSECUTIVE}): {e}')
+                            if consecutive_errors >= MAX_CONSECUTIVE:
+                                log('too many consecutive errors, exiting')
+                                return
+                    await asyncio.sleep(0.1)
+        finally:
+            await rsd.close()
 
     try:
         asyncio.run(_run())
@@ -270,19 +283,42 @@ def cmd_clear(udid):
     import asyncio
 
     async def _clear():
-        from pymobiledevice3.tunneld.api import get_tunneld_devices
-        from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
+        import requests
+        from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
 
-        rsds = await get_tunneld_devices()
-        target = next((r for r in rsds if r.udid == udid), None)
-        if not target:
+        try:
+            tunnels = requests.get('http://127.0.0.1:49151', timeout=2).json()
+        except Exception as e:
+            print(f'tunneld API failed: {e}', file=sys.stderr)
+            sys.exit(2)
+
+        if udid not in tunnels:
             print(f'device {udid} not found in tunneld', file=sys.stderr)
             sys.exit(2)
 
-        async with DvtSecureSocketProxyService(target) as dvt:
-            ls = LocationSimulation(dvt)
-            await ls.clear()
+        rsd = None
+        for tunnel_details in tunnels[udid]:
+            r = RemoteServiceDiscoveryService(
+                (tunnel_details['tunnel-address'], tunnel_details['tunnel-port']),
+                name=tunnel_details['interface']
+            )
+            try:
+                await r.connect()
+                rsd = r
+                break
+            except Exception:
+                pass
+        if not rsd:
+            print(f'failed to connect RSD for {udid}', file=sys.stderr)
+            sys.exit(2)
+
+        try:
+            async with DvtProvider(rsd) as dvt, LocationSimulation(dvt) as ls:
+                await ls.clear()
+        finally:
+            await rsd.close()
 
     try:
         asyncio.run(_clear())
