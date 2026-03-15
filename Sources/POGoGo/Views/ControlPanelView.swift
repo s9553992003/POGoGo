@@ -470,8 +470,14 @@ struct ControlPanelView: View {
                 .onChange(of: coordInput) { _ in coordInputError = false }
 
                 Button(action: startAutoWalkToCoord) {
-                    Image(systemName: "figure.walk.arrival")
-                        .font(.system(size: 14))
+                    Group {
+                        if #available(macOS 13.0, *) {
+                            Image(systemName: "figure.walk.arrival")
+                        } else {
+                            Image(systemName: "mappin.and.ellipse")
+                        }
+                    }
+                    .font(.system(size: 14))
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(coordInput.trimmingCharacters(in: .whitespaces).isEmpty)

@@ -43,7 +43,9 @@ enum SpeedMode: String, CaseIterable {
     var icon: String {
         switch self {
         case .walk: return "figure.walk"
-        case .jog: return "figure.run"
+        case .jog:
+            if #available(macOS 13.0, *) { return "figure.run" }
+            return "hare"
         case .bike: return "bicycle"
         case .car: return "car.fill"
         }
