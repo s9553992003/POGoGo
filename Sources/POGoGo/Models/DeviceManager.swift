@@ -334,9 +334,11 @@ class DeviceManager: ObservableObject {
             isLaunchDaemonInstalled = false
             return
         }
-        // 驗證 plist 是否指向當前 deployed binary，且 PATH 包含 /sbin（避免舊版設定殘留）
+        // 驗證 plist 是否指向當前 deployed binary、PATH 含 /sbin、且已設定 TMPDIR（避免舊版設定殘留）
         let plistContent = (try? String(contentsOfFile: launchDaemonPlist, encoding: .utf8)) ?? ""
-        isLaunchDaemonInstalled = plistContent.contains(deployedToolPath) && plistContent.contains("/sbin")
+        isLaunchDaemonInstalled = plistContent.contains(deployedToolPath)
+            && plistContent.contains("/sbin")
+            && plistContent.contains("TMPDIR")
     }
 
     /// 安裝 tunneld 為 LaunchDaemon，使用內建的 pogogo binary。
@@ -364,6 +366,8 @@ class DeviceManager: ObservableObject {
 \t\t<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin</string>
 \t\t<key>PYTHONUNBUFFERED</key>
 \t\t<string>1</string>
+\t\t<key>TMPDIR</key>
+\t\t<string>\(toolTmpDir)</string>
 \t</dict>
 \t<key>RunAtLoad</key>
 \t<true/>
@@ -384,8 +388,10 @@ class DeviceManager: ObservableObject {
 
         progress("安裝開機自動服務...")
 
+        // 清理舊版 binary 殘留的提取目錄（避免架構不符或 code signature 問題）
         // 優先用 launchctl bootstrap（macOS 13+），失敗則 fallback 至 launchctl load（macOS 12）
-        let shellCmd = "cp '\(tmpPlist)' '\(launchDaemonPlist)' && "
+        let shellCmd = "rm -rf /tmp/pogogo_runtime 2>/dev/null ; "
+            + "cp '\(tmpPlist)' '\(launchDaemonPlist)' && "
             + "chown root:wheel '\(launchDaemonPlist)' && "
             + "chmod 644 '\(launchDaemonPlist)' && "
             + "launchctl bootout system/\(launchDaemonLabel) 2>/dev/null ; "
@@ -443,9 +449,11 @@ class DeviceManager: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             // kickstart -k 失敗（daemon 未 bootstrap）時，用 bootout+bootstrap 確保重新載入
+            // 同時清理舊版 binary 殘留的提取目錄
             let plist = self.launchDaemonPlist
             let label = self.launchDaemonLabel
-            let cmd = "launchctl kickstart -k system/\(label) 2>/dev/null"
+            let cmd = "rm -rf /tmp/pogogo_runtime 2>/dev/null ; "
+                + "launchctl kickstart -k system/\(label) 2>/dev/null"
                 + " || (launchctl bootout system/\(label) 2>/dev/null ;"
                 + " launchctl bootstrap system '\(plist)')"
             self.dlog("restartLaunchDaemon: running kickstart...")
