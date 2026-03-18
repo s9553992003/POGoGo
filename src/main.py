@@ -49,6 +49,9 @@ def main():
         sys.exit(0 if ok else 1)
 
     # ── GUI mode ──────────────────────────────────────────────────────────────
+    # QtWebEngineWidgets MUST be imported before QApplication is created
+    import PyQt6.QtWebEngineWidgets  # noqa: F401
+
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QIcon
