@@ -1,0 +1,55 @@
+name: Build POGoGo-Setup.exe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # 手動觸發
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build exe with PyInstaller
+        run: |
+          pyinstaller `
+            --name POGoGo `
+            --onedir `
+            --windowed `
+            --add-data "src/map.html;." `
+            --paths src `
+            --collect-all pymobiledevice3 `
+            --collect-all readchar `
+            --collect-all inquirer3 `
+            --hidden-import requests `
+            --hidden-import asyncio `
+            --hidden-import cryptography `
+            --hidden-import certifi `
+            --noconfirm `
+            src/main.py
+          Copy-Item src/map.html dist/POGoGo/map.html
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes
+
+      - name: Build installer
+        run: |
+          mkdir -p output
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: POGoGo-Setup
+          path: output/POGoGo-Setup.exe
+          retention-days: 30

@@ -1,0 +1,28 @@
+# Build outputs
+dist/
+build/
+output/
+*.spec.bak
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python venv
+.venv/
+venv/
+env/
+
+# PyInstaller
+*.manifest
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# macOS
+.DS_Store
+
+# Inno Setup temp
+*.log

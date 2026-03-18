@@ -1,0 +1,8 @@
+pymobiledevice3>=9.3.0
+PyQt6>=6.6.0
+PyQt6-WebEngine>=6.6.0
+requests>=2.31.0
+cryptography>=41.0.0
+certifi>=2023.11.17
+readchar>=4.0.5
+inquirer3>=0.3.4
