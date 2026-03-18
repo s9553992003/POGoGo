@@ -16,7 +16,6 @@ DefaultGroupName={#AppName}
 AllowNoIcons=yes
 OutputDir=output
 OutputBaseFilename=POGoGo-Setup
-SetupIconFile=resources\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -34,12 +33,11 @@ Name: "startup";    Description: "Launch POGoGo on Windows startup";    GroupDes
 
 [Files]
 Source: "dist\POGoGo\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "resources\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}";          Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\icon.ico"
+Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}";    Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}";     Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
 ; Per-user app path (no admin)
