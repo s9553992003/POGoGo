@@ -30,6 +30,7 @@ jobs:
             --paths src `
             --version-file version_info.txt `
             --collect-all pymobiledevice3 `
+            --collect-all pytun_pmd3 `
             --collect-all readchar `
             --collect-all inquirer3 `
             --hidden-import requests `
