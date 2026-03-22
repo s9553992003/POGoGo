@@ -40,7 +40,7 @@ class AppState(QObject):
         self.auto_walk_target = None  # (lat, lon)
 
         # Cooldown
-        self.cooldown_enabled = True
+        self.cooldown_enabled = False
         self.cooldown_seconds = 0
 
         # Timers

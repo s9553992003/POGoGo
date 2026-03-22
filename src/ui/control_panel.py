@@ -253,8 +253,8 @@ class ControlPanelWidget(QWidget):
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         r = QHBoxLayout()
-        self._cd_btn = QPushButton("冷卻 開啟 ✓")
-        self._cd_btn.setCheckable(True); self._cd_btn.setChecked(True)
+        self._cd_btn = QPushButton("冷卻 關閉")
+        self._cd_btn.setCheckable(True); self._cd_btn.setChecked(False)
         self._cd_btn.setStyleSheet(
             "QPushButton:checked{background:#1a4a1a;border-color:#2e7d32;color:#66bb6a;}"
         )
