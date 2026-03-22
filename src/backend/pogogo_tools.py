@@ -73,8 +73,8 @@ async def cmd_detect():
     print(json.dumps(result), flush=True)
 
 
-async def cmd_tunneld():
-    """Start tunneld service on localhost:49151."""
+def cmd_tunneld():
+    """Start tunneld service."""
     import logging as _log
     _log.basicConfig(
         level=_log.INFO,
@@ -88,41 +88,74 @@ async def cmd_tunneld():
     logger = _log.getLogger("pogogo.tunneld")
 
     try:
-        from pymobiledevice3.remote.tunnel_service import TunneldCore, TunnelProtocol
-        from pymobiledevice3.usbmux import list_devices as usbmux_list_devices
+        from pymobiledevice3.tunneld.server import TunneldRunner, TunneldCore, TunnelTask
+        from pymobiledevice3.tunneld.api import TUNNELD_DEFAULT_ADDRESS
+        from pymobiledevice3.remote.common import TunnelProtocol
+        from pymobiledevice3.remote.tunnel_service import CoreDeviceTunnelProxy
+        from pymobiledevice3 import usbmux
+        from pymobiledevice3.lockdown import create_using_usbmux
 
-        # Capture original coroutine function
-        _orig_monitor = TunneldCore.monitor_usbmux_task
+        host, port = TUNNELD_DEFAULT_ADDRESS
+        original_monitor_usbmux = TunneldCore.monitor_usbmux_task
 
-        async def _patched_monitor(self):
-            logger.info("TunneldCore: initial USB device scan")
-            delays = [0, 3, 5, 10, 15, 20]
-            for i, delay in enumerate(delays):
-                await asyncio.sleep(delay)
-                try:
-                    existing = await usbmux_list_devices()
-                    for dev in existing:
-                        if dev.connection_type == "USB":
-                            logger.info(f"Existing device: {dev.serial}")
-                            try:
-                                await self._handle_new_device(dev.serial)
-                            except Exception as e2:
-                                logger.warning(f"  handle {dev.serial}: {e2}")
-                    break
-                except Exception as e:
-                    logger.warning(f"Initial scan attempt {i+1}/6: {e}")
+        async def _try_connect_device(self, mux_device):
+            tid = f"usbmux-{mux_device.serial}-{mux_device.connection_type}"
+            if self.tunnel_exists_for_udid(mux_device.serial) or tid in self.tunnel_tasks:
+                return True
+            service = None
+            try:
+                async with await create_using_usbmux(mux_device.serial) as lockdown:
+                    service = await CoreDeviceTunnelProxy.create(lockdown)
+                self.tunnel_tasks[tid] = TunnelTask(
+                    udid=mux_device.serial,
+                    task=asyncio.create_task(
+                        self.start_tunnel_task(tid, service, protocol=TunnelProtocol.TCP),
+                        name=f"start-tunnel-task-{tid}",
+                    ),
+                )
+                return True
+            except Exception as e:
+                logger.warning(f"{mux_device.serial}: tunnel failed: {e}")
+                if service is not None:
+                    try:
+                        await service.close()
+                    except Exception:
+                        pass
+                return False
 
-            await _orig_monitor(self)
+        async def patched_monitor_usbmux(self):
+            async def initial_scan_with_retry():
+                delays = [0, 3, 5, 10, 15, 20]
+                for attempt, delay in enumerate(delays):
+                    if delay:
+                        await asyncio.sleep(delay)
+                    try:
+                        mux = await usbmux.create_mux()
+                        await mux.get_device_list(timeout=2.0)
+                        devs = list(mux.devices)
+                        await mux.close()
+                    except Exception as e:
+                        logger.warning(f"scan attempt {attempt+1} mux error: {e}")
+                        continue
+                    pending = [
+                        d for d in devs
+                        if not self.tunnel_exists_for_udid(d.serial)
+                        and f"usbmux-{d.serial}-{d.connection_type}" not in self.tunnel_tasks
+                    ]
+                    if not pending:
+                        return
+                    for mux_device in pending:
+                        await self._try_connect_device(mux_device)
 
-        TunneldCore.monitor_usbmux_task = _patched_monitor
+            asyncio.create_task(initial_scan_with_retry(), name="pogogo-initial-scan")
+            await original_monitor_usbmux(self)
 
-        runner = TunneldCore(
-            host="127.0.0.1",
-            port=49151,
-            protocol=TunnelProtocol.TCP,
-        )
-        logger.info("Starting tunneld on 127.0.0.1:49151")
-        await runner.start_server()
+        TunneldCore._try_connect_device = _try_connect_device
+        TunneldCore.monitor_usbmux_task = patched_monitor_usbmux
+
+        logger.info(f"Starting tunneld on {host}:{port}")
+        runner = TunneldRunner(host=host, port=port, protocol=TunnelProtocol.TCP)
+        runner._run_app()
 
     except Exception as e:
         logger.error(f"tunneld fatal: {e}", exc_info=True)
@@ -263,7 +296,7 @@ def main():
     if cmd == "detect":
         asyncio.run(cmd_detect())
     elif cmd == "tunneld":
-        asyncio.run(cmd_tunneld())
+        cmd_tunneld()
     elif cmd == "worker":
         if len(sys.argv) < 3:
             print("Usage: POGoGo worker <udid>")
