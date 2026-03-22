@@ -4,7 +4,6 @@ Commands: detect, tunneld, worker <udid>, clear <udid>
 """
 import asyncio
 import json
-import logging
 import os
 import sys
 import time
@@ -162,118 +161,134 @@ def cmd_tunneld():
         sys.exit(1)
 
 
-async def cmd_worker(udid: str):
+def cmd_worker(udid: str):
     """GPS injection worker: reads coords file and injects via DVT."""
-    import logging as _log
-    _log.basicConfig(
-        level=_log.INFO,
-        format="%(asctime)s %(levelname)s: %(message)s",
-        handlers=[
-            _log.FileHandler(str(WORKER_LOG), encoding="utf-8"),
-            _log.StreamHandler(sys.stdout),
-        ],
-        force=True,
-    )
-    logger = _log.getLogger("pogogo.worker")
-    logger.info(f"Worker starting for {udid}")
+    LOG = str(WORKER_LOG)
+
+    def log(msg):
+        try:
+            with open(LOG, "a", encoding="utf-8") as f:
+                f.write(str(msg) + "\n")
+        except Exception:
+            pass
 
     STOP_FILE.unlink(missing_ok=True)
+    log(f"Worker starting for {udid}")
 
-    tunnel = await _get_tunnel_for_udid(udid, logger)
-    if not tunnel:
-        logger.error("No tunnel found")
-        sys.exit(1)
+    REFRESH_INTERVAL = 2.0
 
-    host, port = tunnel
-    logger.info(f"Connecting RSD {host}:{port}")
-
-    try:
+    async def _run():
+        import requests
         from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-        from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
 
-        async with RemoteServiceDiscoveryService((host, port)) as rsd:
-            async with DvtSecureSocketProxyService(lockdown=rsd) as dvt:
-                async with LocationSimulation(dvt) as ls:
-                    logger.info("LocationSimulation ready")
-                    last_coord = None
-                    last_set_time = 0.0
-                    consecutive_errors = 0
-
-                    while True:
-                        if STOP_FILE.exists():
-                            logger.info("Stop signal")
-                            break
-
-                        coord = _read_coords()
-                        now = time.monotonic()
-
-                        if coord and (coord != last_coord or now - last_set_time >= 2.0):
-                            try:
-                                await ls.set(coord[0], coord[1])
-                                last_coord = coord
-                                last_set_time = now
-                                consecutive_errors = 0
-                            except Exception as e:
-                                consecutive_errors += 1
-                                logger.error(f"ls.set error ({consecutive_errors}): {e}")
-                                if consecutive_errors >= 3:
-                                    break
-
-                        await asyncio.sleep(0.1)
-
-    except Exception as e:
-        logger.error(f"Worker error: {e}", exc_info=True)
-        sys.exit(1)
-
-
-async def cmd_clear(udid: str):
-    """Clear GPS spoofing on device."""
-    logger = logging.getLogger("pogogo.clear")
-    tunnel = await _get_tunnel_for_udid(udid, logger)
-    if not tunnel:
-        print("ERROR: no tunnel", flush=True)
-        sys.exit(1)
-
-    host, port = tunnel
-    try:
-        from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
-        from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-        from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
-
-        async with RemoteServiceDiscoveryService((host, port)) as rsd:
-            async with DvtSecureSocketProxyService(lockdown=rsd) as dvt:
-                async with LocationSimulation(dvt) as ls:
-                    await ls.clear()
-                    print("OK", flush=True)
-    except Exception as e:
-        print(f"ERROR: {e}", flush=True)
-        sys.exit(1)
-
-
-async def _get_tunnel_for_udid(udid: str, logger) -> tuple | None:
-    """Query tunneld HTTP API for tunnel address."""
-    import requests as req
-
-    for attempt in range(5):
-        if attempt > 0:
-            await asyncio.sleep(attempt * 3)
         try:
-            resp = req.get("http://127.0.0.1:49151", timeout=3)
-            data = resp.json()
-            for entry in data:
-                eu = entry.get("udid") or entry.get("serial") or ""
-                if eu == udid or udid == "":
-                    tunnel = entry.get("tunnel") or entry.get("tunnelAddress") or {}
-                    if isinstance(tunnel, dict):
-                        return tunnel.get("host"), int(tunnel.get("port", 0))
-                    elif isinstance(tunnel, str) and ":" in tunnel:
-                        h, p = tunnel.rsplit(":", 1)
-                        return h, int(p)
+            tunnels = requests.get("http://127.0.0.1:49151", timeout=3).json()
         except Exception as e:
-            logger.warning(f"tunneld query attempt {attempt+1}: {e}")
+            log(f"tunneld API failed: {e}")
+            sys.exit(2)
 
-    return None
+        if udid not in tunnels:
+            log(f"device not in tunneld: {udid}")
+            log(f"tunneld has: {', '.join(tunnels.keys())}")
+            sys.exit(2)
+
+        rsd = None
+        for tunnel_details in tunnels[udid]:
+            r = RemoteServiceDiscoveryService(
+                (tunnel_details["tunnel-address"], tunnel_details["tunnel-port"]),
+                name=tunnel_details["interface"],
+            )
+            try:
+                await r.connect()
+                rsd = r
+                break
+            except Exception as e:
+                log(f"rsd connect error: {e}")
+        if not rsd:
+            log(f"failed to connect RSD for {udid}")
+            sys.exit(2)
+
+        log(f"connecting DVT to {udid}")
+        try:
+            async with DvtProvider(rsd) as dvt, LocationSimulation(dvt) as ls:
+                log("LocationSimulation ready")
+                last = None
+                last_set_time = 0.0
+                consecutive_errors = 0
+                while not STOP_FILE.exists():
+                    coord = _read_coords()
+                    now = time.monotonic()
+                    if coord and (coord != last or now - last_set_time >= REFRESH_INTERVAL):
+                        try:
+                            await ls.set(coord[0], coord[1])
+                            changed = coord != last
+                            last = coord
+                            last_set_time = now
+                            consecutive_errors = 0
+                            log(("set " if changed else "refresh ") + str(coord))
+                        except Exception as e:
+                            consecutive_errors += 1
+                            log(f"set error ({consecutive_errors}/3): {e}")
+                            if consecutive_errors >= 3:
+                                log("too many consecutive errors, exiting")
+                                return
+                    await asyncio.sleep(0.1)
+        finally:
+            await rsd.close()
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        log(f"fatal: {e}")
+        sys.exit(1)
+
+    log("worker done")
+
+
+def cmd_clear(udid: str):
+    """Clear GPS spoofing on device."""
+    async def _clear():
+        import requests
+        from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+        from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+
+        try:
+            tunnels = requests.get("http://127.0.0.1:49151", timeout=3).json()
+        except Exception as e:
+            print(f"ERROR: tunneld API failed: {e}", flush=True)
+            sys.exit(1)
+
+        if udid not in tunnels:
+            print(f"ERROR: device not in tunneld", flush=True)
+            sys.exit(1)
+
+        rsd = None
+        for tunnel_details in tunnels[udid]:
+            r = RemoteServiceDiscoveryService(
+                (tunnel_details["tunnel-address"], tunnel_details["tunnel-port"]),
+                name=tunnel_details["interface"],
+            )
+            try:
+                await r.connect()
+                rsd = r
+                break
+            except Exception:
+                pass
+        if not rsd:
+            print("ERROR: failed to connect RSD", flush=True)
+            sys.exit(1)
+
+        try:
+            async with DvtProvider(rsd) as dvt, LocationSimulation(dvt) as ls:
+                await ls.clear()
+                print("OK", flush=True)
+        finally:
+            await rsd.close()
+
+    asyncio.run(_clear())
 
 
 def _read_coords() -> tuple | None:
@@ -301,12 +316,12 @@ def main():
         if len(sys.argv) < 3:
             print("Usage: POGoGo worker <udid>")
             sys.exit(1)
-        asyncio.run(cmd_worker(sys.argv[2]))
+        cmd_worker(sys.argv[2])
     elif cmd == "clear":
         if len(sys.argv) < 3:
             print("Usage: POGoGo clear <udid>")
             sys.exit(1)
-        asyncio.run(cmd_clear(sys.argv[2]))
+        cmd_clear(sys.argv[2])
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
