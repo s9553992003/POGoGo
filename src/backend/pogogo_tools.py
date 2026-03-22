@@ -43,14 +43,14 @@ def save_device_cache(cache: dict):
 
 async def cmd_detect():
     """List connected USB iPhones as JSON."""
-    from pymobiledevice3.usbmux import usbmux
+    from pymobiledevice3.usbmux import list_devices as usbmux_list_devices
     from pymobiledevice3.lockdown import create_using_usbmux
 
     cache = load_device_cache()
     result = []
 
     try:
-        devices = await usbmux.list_devices()
+        devices = await usbmux_list_devices()
     except Exception:
         print(json.dumps([]), flush=True)
         return
@@ -89,7 +89,7 @@ async def cmd_tunneld():
 
     try:
         from pymobiledevice3.remote.tunnel_service import TunneldCore, TunnelProtocol
-        from pymobiledevice3.usbmux import usbmux
+        from pymobiledevice3.usbmux import list_devices as usbmux_list_devices
 
         # Capture original coroutine function
         _orig_monitor = TunneldCore.monitor_usbmux_task
@@ -100,7 +100,7 @@ async def cmd_tunneld():
             for i, delay in enumerate(delays):
                 await asyncio.sleep(delay)
                 try:
-                    existing = await usbmux.list_devices()
+                    existing = await usbmux_list_devices()
                     for dev in existing:
                         if dev.connection_type == "USB":
                             logger.info(f"Existing device: {dev.serial}")
