@@ -10,58 +10,58 @@ from PyQt6.QtWidgets import (
 
 STEPS = [
     {
-        "title": "Welcome to POGoGo",
+        "title": "歡迎使用 POGoGo",
         "icon": "🎮",
         "body": (
-            "<b>GPS Spoofing for Pokémon GO on Windows</b><br><br>"
-            "• <b>Map</b> — Click to teleport instantly<br>"
-            "• <b>Joystick</b> — Walk with analog control<br>"
-            "• <b>Auto-Walk</b> — Set a destination and go<br>"
-            "• <b>Cooldown Timer</b> — Avoid ban detection<br>"
-            "• <b>Speed Modes</b> — Walk / Jog / Bike / Car"
+            "<b>Windows 版 Pokémon GO GPS 模擬工具</b><br><br>"
+            "• <b>地圖</b> — 點擊即可立即傳送<br>"
+            "• <b>搖桿</b> — 類比控制行走方向<br>"
+            "• <b>自動行走</b> — 設定目的地自動前往<br>"
+            "• <b>冷卻計時器</b> — 避免被偵測封號<br>"
+            "• <b>速度模式</b> — 步行 / 慢跑 / 腳踏車 / 汽車"
         ),
     },
     {
-        "title": "Device Setup",
+        "title": "裝置設定",
         "icon": "📱",
         "body": (
             "<ol style='margin:0;padding-left:18px;'>"
-            "<li style='margin-bottom:6px;'>Enable <b>Developer Mode</b> on iPhone<br>"
-            "<small>Settings → Privacy → Developer Mode → Enable</small></li>"
-            "<li style='margin-bottom:6px;'>Connect iPhone via <b>USB cable</b><br>"
-            "<small>Trust the computer if prompted</small></li>"
-            "<li style='margin-bottom:6px;'>Click <b>Refresh</b> in the device panel<br>"
-            "<small>Your iPhone should appear in the dropdown</small></li>"
-            "<li style='margin-bottom:6px;'>Click <b>Install Tunnel Service</b><br>"
-            "<small>Requires admin rights (UAC prompt will appear)</small></li>"
+            "<li style='margin-bottom:6px;'>開啟 iPhone 的<b>開發者模式</b><br>"
+            "<small>設定 → 隱私權與安全性 → 開發者模式 → 啟用</small></li>"
+            "<li style='margin-bottom:6px;'>用 <b>USB 線</b>連接 iPhone<br>"
+            "<small>若出現提示請點選「信任」</small></li>"
+            "<li style='margin-bottom:6px;'>點擊裝置面板的<b>重新整理</b><br>"
+            "<small>iPhone 應出現在下拉選單中</small></li>"
+            "<li style='margin-bottom:6px;'>以<b>系統管理員身份</b>執行 POGoGo<br>"
+            "<small>通道服務需要管理員權限</small></li>"
             "</ol>"
         ),
     },
     {
-        "title": "How to Use",
+        "title": "使用說明",
         "icon": "🗺️",
         "body": (
             "<table style='border-spacing:4px;'>"
-            "<tr><td>🖱️ Left click map</td><td>→ Teleport instantly</td></tr>"
-            "<tr><td>🖱️ Right click map</td><td>→ Auto-Walk / Teleport menu</td></tr>"
-            "<tr><td>🕹️ Joystick drag</td><td>→ Move continuously</td></tr>"
-            "<tr><td>⌨️ Arrow keys / WASD</td><td>→ Keyboard movement</td></tr>"
-            "<tr><td>🔍 Search bar</td><td>→ Find any location</td></tr>"
-            "<tr><td>⏱️ Cooldown timer</td><td>→ Wait before re-spoofing</td></tr>"
+            "<tr><td>🖱️ 地圖左鍵點擊</td><td>→ 立即傳送</td></tr>"
+            "<tr><td>🖱️ 地圖右鍵點擊</td><td>→ 自動行走 / 傳送選單</td></tr>"
+            "<tr><td>🕹️ 拖曳搖桿</td><td>→ 持續移動</td></tr>"
+            "<tr><td>⌨️ 方向鍵 / WASD</td><td>→ 鍵盤移動</td></tr>"
+            "<tr><td>🔍 搜尋欄</td><td>→ 搜尋任意地點</td></tr>"
+            "<tr><td>⏱️ 冷卻計時器</td><td>→ 傳送後等待冷卻</td></tr>"
             "</table>"
         ),
     },
     {
-        "title": "You're Ready!",
+        "title": "準備就緒！",
         "icon": "✅",
         "body": (
-            "<b>Quick Tips</b><br><br>"
-            "• Always wait for the <b>Cooldown Timer</b> after large jumps<br>"
-            "• Use <b>Walk mode</b> (1.4 m/s) for most gameplay<br>"
-            "• The tunnel auto-reconnects on device replug<br>"
-            "• Logs available via the 'View Log' button<br><br>"
-            "<small style='color:#888;'>POGoGo uses the iOS DVT tunnel for<br>"
-            "reliable GPS injection on iOS 17+</small>"
+            "<b>使用小技巧</b><br><br>"
+            "• 大距離傳送後務必等待<b>冷卻計時器</b>結束<br>"
+            "• 一般遊玩建議使用<b>步行模式</b>（1.4 m/s）<br>"
+            "• 重新插拔裝置後通道會自動重新連接<br>"
+            "• 可透過「查看日誌」按鈕查看通道記錄<br><br>"
+            "<small style='color:#888;'>POGoGo 使用 iOS DVT 通道<br>"
+            "在 iOS 17+ 上穩定注入 GPS</small>"
         ),
     },
 ]
@@ -70,7 +70,7 @@ STEPS = [
 class OnboardingDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("POGoGo Setup")
+        self.setWindowTitle("POGoGo 設定")
         self.setFixedSize(540, 460)
         self.setModal(True)
         self.setStyleSheet("""
@@ -118,11 +118,11 @@ class OnboardingDialog(QDialog):
 
         # Buttons
         btn_row = QHBoxLayout()
-        self._skip_btn = QPushButton("Skip")
+        self._skip_btn = QPushButton("跳過")
         self._skip_btn.setObjectName("skip")
         self._skip_btn.clicked.connect(self.accept)
-        self._back_btn = QPushButton("← Back")
-        self._next_btn = QPushButton("Next →")
+        self._back_btn = QPushButton("← 返回")
+        self._next_btn = QPushButton("下一步 →")
         self._back_btn.clicked.connect(self._prev)
         self._next_btn.clicked.connect(self._next)
         btn_row.addWidget(self._skip_btn)
@@ -162,7 +162,7 @@ class OnboardingDialog(QDialog):
     def _update_ui(self):
         self._stack.setCurrentIndex(self._step)
         is_last = self._step == len(STEPS) - 1
-        self._next_btn.setText("Get Started" if is_last else "Next →")
+        self._next_btn.setText("開始使用" if is_last else "下一步 →")
         self._back_btn.setVisible(self._step > 0)
         for i, dot in enumerate(self._step_dots):
             dot.setStyleSheet(

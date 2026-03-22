@@ -145,12 +145,12 @@ class ControlPanelWidget(QWidget):
     # ── Groups ────────────────────────────────────────────────────────────────
 
     def _g_device(self):
-        g = QGroupBox("Device")
+        g = QGroupBox("裝置")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         r = QHBoxLayout()
         self._dev_dot = _Dot()
-        self._dev_lbl = QLabel("No device connected")
+        self._dev_lbl = QLabel("未連接裝置")
         self._dev_lbl.setStyleSheet("font-size:12px;")
         r.addWidget(self._dev_dot); r.addWidget(self._dev_lbl, 1)
         lay.addLayout(r)
@@ -158,40 +158,40 @@ class ControlPanelWidget(QWidget):
         r2 = QHBoxLayout()
         self._dev_combo = QComboBox()
         self._dev_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._refresh_btn = _btn("Refresh"); self._refresh_btn.setFixedWidth(64)
+        self._refresh_btn = _btn("重新整理"); self._refresh_btn.setFixedWidth(72)
         r2.addWidget(self._dev_combo, 1); r2.addWidget(self._refresh_btn)
         lay.addLayout(r2)
         return g
 
     def _g_tunnel(self):
-        g = QGroupBox("iOS 17+ Tunnel  (auto-managed)")
+        g = QGroupBox("iOS 17+ 通道（自動管理）")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         r = QHBoxLayout()
         self._tun_dot = _Dot()
-        self._tun_lbl = QLabel("Starting...")
+        self._tun_lbl = QLabel("啟動中...")
         self._tun_lbl.setStyleSheet("font-size:12px;")
         r.addWidget(self._tun_dot); r.addWidget(self._tun_lbl, 1)
         lay.addLayout(r)
 
         r2 = QHBoxLayout()
-        self._restart_btn = _btn("Restart Tunnel")
+        self._restart_btn = _btn("重啟通道")
         self._restart_btn.clicked.connect(self.dm.restart_tunneld)
-        self._log_btn = _btn("View Log")
+        self._log_btn = _btn("查看日誌")
         self._log_btn.clicked.connect(self._on_view_log)
         r2.addWidget(self._restart_btn); r2.addWidget(self._log_btn)
         lay.addLayout(r2)
         return g
 
     def _g_search(self):
-        g = QGroupBox("Location Search")
+        g = QGroupBox("位置搜尋")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         r = QHBoxLayout()
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("Search location...")
+        self._search_edit.setPlaceholderText("搜尋地點...")
         self._search_edit.returnPressed.connect(self._on_search)
-        self._search_btn = _btn("Go"); self._search_btn.setFixedWidth(40)
+        self._search_btn = _btn("前往"); self._search_btn.setFixedWidth(48)
         self._search_btn.clicked.connect(self._on_search)
         r.addWidget(self._search_edit, 1); r.addWidget(self._search_btn)
         lay.addLayout(r)
@@ -203,20 +203,20 @@ class ControlPanelWidget(QWidget):
         return g
 
     def _g_coord(self):
-        g = QGroupBox("Current Location")
+        g = QGroupBox("目前位置")
         lay = QVBoxLayout(g); lay.setSpacing(4)
 
         r = QHBoxLayout()
         self._coord_lbl = QLabel("25.047837°N  121.531737°E")
         self._coord_lbl.setStyleSheet("font-size:11px;color:#aaa;font-family:Consolas;")
-        self._copy_btn = _btn("Copy"); self._copy_btn.setFixedWidth(48)
+        self._copy_btn = _btn("複製"); self._copy_btn.setFixedWidth(48)
         self._copy_btn.clicked.connect(self._on_copy)
         r.addWidget(self._coord_lbl, 1); r.addWidget(self._copy_btn)
         lay.addLayout(r)
         return g
 
     def _g_speed(self):
-        g = QGroupBox("Speed")
+        g = QGroupBox("速度")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         mr = QHBoxLayout(); mr.setSpacing(4)
@@ -240,7 +240,7 @@ class ControlPanelWidget(QWidget):
         return g
 
     def _g_joystick(self):
-        g = QGroupBox("Joystick  (Arrow Keys / WASD)")
+        g = QGroupBox("搖桿（方向鍵 / WASD）")
         lay = QVBoxLayout(g)
         lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._joystick = JoystickWidget()
@@ -249,39 +249,39 @@ class ControlPanelWidget(QWidget):
         return g
 
     def _g_cooldown(self):
-        g = QGroupBox("Cooldown Timer")
+        g = QGroupBox("冷卻計時器")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         r = QHBoxLayout()
-        self._cd_btn = QPushButton("Cooldown ON  ✓")
+        self._cd_btn = QPushButton("冷卻 開啟 ✓")
         self._cd_btn.setCheckable(True); self._cd_btn.setChecked(True)
         self._cd_btn.setStyleSheet(
             "QPushButton:checked{background:#1a4a1a;border-color:#2e7d32;color:#66bb6a;}"
         )
         self._cd_btn.clicked.connect(self._on_cd_toggle)
-        self._skip_btn = _btn("Skip"); self._skip_btn.setFixedWidth(48)
+        self._skip_btn = _btn("跳過"); self._skip_btn.setFixedWidth(48)
         self._skip_btn.clicked.connect(self.app_state.skip_cooldown)
         r.addWidget(self._cd_btn, 1); r.addWidget(self._skip_btn)
         lay.addLayout(r)
 
-        self._cd_lbl = QLabel("No cooldown")
+        self._cd_lbl = QLabel("無冷卻")
         self._cd_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._cd_lbl.setStyleSheet("color:#888;font-size:12px;")
         lay.addWidget(self._cd_lbl)
         return g
 
     def _g_autowalk(self):
-        g = QGroupBox("Auto-Walk Destination")
+        g = QGroupBox("自動行走目的地")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         self._aw_edit = QLineEdit()
-        self._aw_edit.setPlaceholderText("lat, lon  (e.g. 25.047, 121.531)")
+        self._aw_edit.setPlaceholderText("緯度, 經度（例：25.047, 121.531）")
         lay.addWidget(self._aw_edit)
 
         r = QHBoxLayout()
         self._aw_dist = QLabel("")
         self._aw_dist.setStyleSheet("font-size:11px;color:#888;")
-        self._aw_go = _btn("Go", "#1565c0"); self._aw_go.setFixedWidth(50)
+        self._aw_go = _btn("前往", "#1565c0"); self._aw_go.setFixedWidth(50)
         self._aw_go.clicked.connect(self._on_aw_go)
         r.addWidget(self._aw_dist, 1); r.addWidget(self._aw_go)
         lay.addLayout(r)
@@ -290,12 +290,12 @@ class ControlPanelWidget(QWidget):
         return g
 
     def _g_actions(self):
-        g = QGroupBox("Actions")
+        g = QGroupBox("操作")
         lay = QVBoxLayout(g); lay.setSpacing(6)
 
         r = QHBoxLayout()
-        self._stop_btn = _btn("Stop Walk", "#b71c1c")
-        self._reset_btn = _btn("Reset GPS", "#4a4a00")
+        self._stop_btn = _btn("停止行走", "#b71c1c")
+        self._reset_btn = _btn("重置 GPS", "#4a4a00")
         self._stop_btn.clicked.connect(self._on_stop)
         self._reset_btn.clicked.connect(self._on_reset)
         r.addWidget(self._stop_btn); r.addWidget(self._reset_btn)
@@ -340,23 +340,23 @@ class ControlPanelWidget(QWidget):
     def _on_connected(self, ok):
         if ok:
             self._dev_dot.set_color("#4caf50")
-            self._dev_lbl.setText(f"{self.dm.device_name(self.dm.selected_udid)} connected")
+            self._dev_lbl.setText(f"{self.dm.device_name(self.dm.selected_udid)} 已連接")
         else:
             self._dev_dot.set_color("#ef5350")
-            self._dev_lbl.setText("No device connected")
+            self._dev_lbl.setText("未連接裝置")
 
     def _on_tunnel_status(self, s):
         colors = {"running": "#4caf50", "starting": "#ffa726",
                   "stopped": "#ef5350", "unknown": "#555"}
-        labels = {"running": "Running  ✓", "starting": "Starting...",
-                  "stopped": "Stopped  (auto-restart)", "unknown": "Unknown"}
+        labels = {"running": "執行中 ✓", "starting": "啟動中...",
+                  "stopped": "已停止（自動重啟）", "unknown": "未知"}
         self._tun_dot.set_color(colors.get(s, "#555"))
         self._tun_lbl.setText(labels.get(s, s))
 
     def _on_view_log(self):
         log = self.dm.get_tunneld_log()
         dlg = QDialog(self)
-        dlg.setWindowTitle("Tunnel Log")
+        dlg.setWindowTitle("通道日誌")
         dlg.resize(620, 420)
         dlg.setStyleSheet("QDialog{background:#1e1e2e;}"
                           "QTextEdit{background:#111;color:#0f0;"
@@ -377,7 +377,7 @@ class ControlPanelWidget(QWidget):
         nominatim_search(q, lambda r: QTimer.singleShot(0, lambda: self._show_results(r)))
 
     def _show_results(self, results):
-        self._search_btn.setText("Go"); self._search_btn.setEnabled(True)
+        self._search_btn.setText("前往"); self._search_btn.setEnabled(True)
         while self._res_lay.count():
             item = self._res_lay.takeAt(0)
             if item.widget(): item.widget().deleteLater()
@@ -416,15 +416,15 @@ class ControlPanelWidget(QWidget):
 
     def _on_cd_toggle(self, checked):
         self.app_state.cooldown_enabled = checked
-        self._cd_btn.setText("Cooldown ON  ✓" if checked else "Cooldown OFF")
+        self._cd_btn.setText("冷卻 開啟 ✓" if checked else "冷卻 關閉")
 
     def _on_cd_tick(self, secs):
         if secs <= 0:
-            self._cd_lbl.setText("Ready")
+            self._cd_lbl.setText("可操作")
             self._cd_lbl.setStyleSheet("color:#4caf50;font-size:12px;")
         else:
             m, s = divmod(secs, 60)
-            self._cd_lbl.setText(f"Wait: {m:02d}:{s:02d}")
+            self._cd_lbl.setText(f"等待：{m:02d}:{s:02d}")
             self._cd_lbl.setStyleSheet("color:#ffa726;font-size:12px;")
 
     def _on_aw_text(self, text):
@@ -440,7 +440,7 @@ class ControlPanelWidget(QWidget):
             lat, lon = (float(x) for x in self._aw_edit.text().strip().split(","))
             self.auto_walk_to.emit(lat, lon)
         except Exception:
-            QMessageBox.warning(self, "Invalid", "Enter: lat, lon  (e.g. 25.047, 121.531)")
+            QMessageBox.warning(self, "格式錯誤", "請輸入：緯度, 經度（例：25.047, 121.531）")
 
     def _on_stop(self):  self.stop_walk.emit()
     def _on_reset(self): self.reset_gps.emit()
