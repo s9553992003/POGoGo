@@ -34,7 +34,7 @@ a = Analysis(
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
-    collect_all=['pymobiledevice3', 'readchar', 'inquirer3'],
+    collect_all=['pymobiledevice3', 'readchar', 'inquirer3', 'pytun_pmd3'],
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)

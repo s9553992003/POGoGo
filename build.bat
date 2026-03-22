@@ -36,6 +36,7 @@ pyinstaller ^
     --collect-all pymobiledevice3 ^
     --collect-all readchar ^
     --collect-all inquirer3 ^
+    --collect-all pytun_pmd3 ^
     --hidden-import requests ^
     --hidden-import asyncio ^
     --hidden-import cryptography ^
